@@ -1,20 +1,23 @@
-version: '3.8'
+version: "3.8"
 services:
   jenkins:
     image: jenkins/jenkins:lts
+    init: true
     restart: always
     environment:
-     - TZ=Asia/Taipei
+      - TZ=Asia/Taipei
     privileged: true
     user: root
     ports:
-     - 8099:8080
-     - 50000:50000
+      - 8099:8080
+      - 50000:50000
     container_name: jenkins
     volumes:
-      # Without /bin/tini, it can not be brought so comment out the below line
-      #- ./data/usr:/usr
       - /data/shell:/data/shell
       - ./data/jenkins_configuration:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
+    command: >
+      /bin/bash -c "apt-get update &&
+      apt-get install -y curl dnsutils &&
+      /usr/local/bin/jenkins.sh"
