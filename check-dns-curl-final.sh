@@ -4,7 +4,7 @@ set -x
 
 LOCAL_URL_FILE="./urls.txt"
 JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到/var/jenkins_home/底下
-SLACK_WEBHOOK_URL=`cat slack.key`
+SLACK_WEBHOOK_URL=`cat slack.key` # 測試用的slack webhook url
 
 # 方便測試，可以直接在這裡設定要測試的domain
 if [ -z "$1" ] && [ ! -z "$CHECKING_DOMAIN" ]; then
@@ -13,12 +13,13 @@ if [ -z "$1" ] && [ ! -z "$CHECKING_DOMAIN" ]; then
 elif [ ! -z "$1" ]; then
   CHECKING_DOMAIN=$1
 fi
-
+# 如果有urls.txt，就用優先用本機上的urls.txt，沒有就用jenkins上的
 if [ -f "$LOCAL_URL_FILE" ]; then
   URL_FILE="$LOCAL_URL_FILE"
 else
   URL_FILE="$JENKINS_URL_FILE"
   if [ -f "$JENKINS_URL_FILE" ]; then
+  # 沒有檔案，就產生一個檔案，避免jenkins上的shell script出錯
   echo "1919.com" > /var/jenkins_home/urls.txt
   fi
 fi
@@ -99,7 +100,7 @@ while IFS= read -r url; do
 
   dns_status=$(check_dns_resolution "$url")
   line="${url}_curl: ${http_status}, ${url}_dns: ${dns_status}"
-
+  # 假如有redirect，就要再檢查一次
   if [ "$redirect_info" = "REDIRECT" ]; then
     final_url=$(echo "$result" | cut -d'|' -f3)
     if [ -n "$final_url" ]; then
@@ -114,7 +115,7 @@ while IFS= read -r url; do
 done < "$URL_FILE"
 
 
-# 檢查jenkins設定的domain（不在urls.txt)，因為不用bash，所以IFS要設定，比較複雜
+# 檢查jenkins設定的domain（不在urls.txt)，因為不用bash的功能，所以IFS要來分隔，比較複雜
 OLD_IFS="$IFS"
 IFS=','
 set -f
