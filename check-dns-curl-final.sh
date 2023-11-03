@@ -43,10 +43,11 @@ check_http_service() {
   status_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
   # Get the effective URL after all redirections (if any), but do not follow redirects
   effective_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
+  url_without_scheme=$(echo $effective_url | sed -E 's,https?://,,; s,/.*,,g')
 
   # If the effective URL is different from the original URL, a redirect has occurred
-  if [ "$url" != "$effective_url" ]; then
-    echo "${status_code}|REDIRECT|${effective_url}"
+  if [ "$url" != "$url_without_scheme" ]; then
+    echo "${status_code}|REDIRECT|${url_without_scheme}"
   else
     echo "${status_code}|NO_REDIRECT|$url"
   fi
@@ -165,10 +166,10 @@ format_results() {
 }
 formatted_results=$(format_results "$results")
 # Post results to Slack and the alert server
-json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results")
+#json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results")
 # Uncomment the following line to enable Slack posting
-post_to_slack "$json_payload"
+#post_to_slack "$json_payload"
 
-#post_to_alert_server "Domain Checking! curl_404 is ok!" "$formatted_results"
+post_to_alert_server "Domain Checking! curl_404 is ok!" "$formatted_results"
 
 # End of script
