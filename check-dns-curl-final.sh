@@ -39,13 +39,11 @@ check_http_service() {
   local status_code
   local effective_url
 
-  # Get the status code of the original URL without following redirects
   status_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
-  # Get the effective URL after all redirections (if any), but do not follow redirects
   effective_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
+  # 兩邊格式不一樣，所以要轉換
   url_without_scheme=$(echo $effective_url | sed -E 's,https?://,,; s,/.*,,g')
 
-  # If the effective URL is different from the original URL, a redirect has occurred
   if [ "$url" != "$url_without_scheme" ]; then
     echo "${status_code}|REDIRECT|${url_without_scheme}"
   else
