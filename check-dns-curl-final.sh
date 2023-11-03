@@ -4,7 +4,7 @@ set -x
 
 LOCAL_URL_FILE="./urls.txt"
 JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到/var/jenkins_home/底下
-SLACK_WEBHOOK_URL="https://hooks.slack.com/services/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"
+SLACK_WEBHOOK_URL="https://hooks.slack.com/services/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"
 
 # 方便測試，可以直接在這裡設定要測試的domain
 if [ -z "$1" ] && [ ! -z "$CHECKING_DOMAIN" ]; then
@@ -37,15 +37,18 @@ post_to_slack() {
 check_http_service() {
   local url=$1
   local status_code
-  local redirect_url
+  local effective_url
 
-  status_code=$(curl -Ls -o /dev/null -w '%{http_code}' --max-time 5 "$url")
-  redirect_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
+  # Get the status code of the original URL without following redirects
+  status_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
+  # Get the effective URL after all redirections (if any), but do not follow redirects
+  effective_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
 
-  if [ "$status_code" -ge 300 ] && [ "$status_code" -lt 400 ]; then
-    echo "${status_code}|REDIRECT"
+  # If the effective URL is different from the original URL, a redirect has occurred
+  if [ "$url" != "$effective_url" ]; then
+    echo "${status_code}|REDIRECT|${effective_url}"
   else
-    echo "${status_code}|${redirect_url}"
+    echo "${status_code}|NO_REDIRECT|$url"
   fi
 }
 
@@ -104,7 +107,7 @@ while IFS= read -r url; do
   # If there was a redirect, then the URL has changed
   if [ "$redirect_info" = "REDIRECT" ]; then
     # Since it's a redirect, we need to extract the redirect URL using the Location header
-    final_url=$(curl -Ls -I "$url" | grep -i "^Location:" | tail -n1 | sed 's/Location: //')
+    final_url=$(echo "$result" | cut -d'|' -f3)
     if [ -n "$final_url" ]; then
       redirect_http_status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$final_url")
       dns_redirect_status=$(check_dns_resolution "$final_url")
@@ -126,7 +129,7 @@ for domain in $CHECKING_DOMAIN; do
     # Get HTTP status and final URL after redirects
     http_status_and_url=$(check_http_service "$domain")
     http_status=$(echo "$http_status_and_url" | cut -d'|' -f1)
-    final_url=$(echo "$http_status_and_url" | cut -d'|' -f2)
+    final_url=$(echo "$http_status_and_url" | cut -d'|' -f3)
 
     dns_status=$(check_dns_resolution "$domain")
     redirect_dns_status="not_applicable"
