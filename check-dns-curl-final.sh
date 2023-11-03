@@ -149,11 +149,11 @@ IFS="$OLD_IFS"
 
 
 # Post results to Slack and the alert server
-json_payload=$(printf '{"text":"Results:\n%s"}' "$results")
+#json_payload=$(printf '{"text":"Results:\n%s"}' "$results")
 # Uncomment the following line to enable Slack posting
-post_to_slack "$json_payload"
+#post_to_slack "$json_payload"
 
-#post_to_alert_server "TEST: Please ignore it!" "$results"
+post_to_alert_server "TEST: Please ignore it!" "$results"
 
 # End of script
 
