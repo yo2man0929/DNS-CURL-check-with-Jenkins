@@ -1,11 +1,15 @@
 #!/bin/sh
+set -x 
 
 LOCAL_URL_FILE="./urls.txt" # 方便local測試
-JENKINS_URL_FILE="/var/jenkins_home/urls.txt"
-SLACK_WEBHOOK_URL="https://hooks.slack.com/services/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"
+JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到Jenkins的volume裡面
+SLACK_WEBHOOK_URL="https://hooks.slack.com/services/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"
 
-CHECKING_DOMAIN=$1
-
+if [ -z "$1" ] && [ ! -z "$CHECKING_DOMAIN" ]; then
+  CHECKING_DOMAIN=$CHECKING_DOMAIN
+elif [ ! -z "$1" ]; then
+  CHECKING_DOMAIN=$1
+fi
 
 if [ -f "$LOCAL_URL_FILE" ]; then
   URL_FILE="$LOCAL_URL_FILE"
@@ -35,14 +39,30 @@ check_http_service() {
 }
 
 check_dns_resolution() {
-  if dig +time=2 +retry=0 "$1" +short A | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' > /dev/null; then
+  # 提取域名部分，去除URL的路径和潜在的DNS后缀
+  local domain=$(echo "$1" | sed -E 's|/.*||' | sed -E 's|_dns$||')
+
+  # 使用dig命令来检查DNS解析
+  if dig +time=2 +retry=0 "$domain" +short A | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' > /dev/null; then
     echo "ok"
   else
     echo "fail"
   fi
 }
 
+post_to_alert_server() {
+  local title="$1"
+  local message="$2"
 
+  curl -X 'POST' \
+    'http://alert-server.hinno.site/normal/DevOps_cronjob' \
+    -H 'accept: application/json' \
+    -H 'Content-Type: application/json' \
+    -d "{
+          \"title\": \"$title\",
+          \"msg\": \"$message\"
+        }"
+}
 check_command curl
 check_command dig
 
@@ -52,11 +72,10 @@ if [ ! -f "$URL_FILE" ]; then
   exit 1
 fi
 
-
 results=""
 TIMESTAMP=$(date +%Y%m%d%H%M)
 mkdir -p /var/jenkins_home/log/ || true
-OUTPUT_FILE="/tmp/check_results_${TIMESTAMP}"
+OUTPUT_FILE="/var/jenkins_home/log/check_results_${TIMESTAMP}"
 
 
 while IFS= read -r url; do
@@ -67,7 +86,7 @@ while IFS= read -r url; do
   echo "${line}" >> "${OUTPUT_FILE}.log"
 done < "$URL_FILE"
 
-# 檢查額外定義的domain
+# 檢查額外定義的domain,因為不能用bash的陣列，所以用IFS分割
 OLD_IFS="$IFS"
 IFS=',' # 设置 IFS 分隔號為逗號
 set -f # 禁用路徑名擴展
@@ -85,7 +104,9 @@ IFS="$OLD_IFS" # 還原 IFS
 
 
 json_payload=$(printf '{"text":"Results:\n%s"}' "$results")
-post_to_slack "$json_payload"
+#post_to_slack "$json_payload"
 
+
+post_to_alert_server "TEST: Please ignore it!" "$results"
 # End of script
 
