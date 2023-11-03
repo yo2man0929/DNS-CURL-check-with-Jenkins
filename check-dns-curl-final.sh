@@ -4,7 +4,7 @@ set -x
 
 LOCAL_URL_FILE="./urls.txt"
 JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到/var/jenkins_home/底下
-SLACK_WEBHOOK_URL="https://hooks.slack.com/services/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"
+SLACK_WEBHOOK_URL="https://hooks.slack.com/services/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"
 
 # 方便測試，可以直接在這裡設定要測試的domain
 if [ -z "$1" ] && [ ! -z "$CHECKING_DOMAIN" ]; then
@@ -148,12 +148,24 @@ set +f
 IFS="$OLD_IFS"
 
 
+format_results() {
+  echo "$1" \
+    | sed -E 's/_curl: 3[0-9]{2}/_curl: ok/g' \
+    | sed -E 's/_curl: 2[0-9]{2}/_curl: ok/g' \
+    | sed -E 's/_curl: 4[0-9]{2}/_curl: ok/g' \
+    | sed -E 's/_curl: 5[0-9]{2}/_curl: not ok/g' \
+    | sed -E 's/_curl: 000/_curl: fail/g' \
+    | sed -E 's/redirect_curl: 2[0-9]{2}/redirect_curl: ok/g' \
+    | sed -E 's/redirect_curl: 4[0-9]{2}/redirect_curl: ok/g' \
+    | sed -E 's/redirect_curl: 5[0-9]{2}/redirect_curl: not ok/g' \
+    | sed -E 's/redirect_curl: 000/redirect_curl: fail/g'
+}
+formatted_results=$(format_results "$results")
 # Post results to Slack and the alert server
-#json_payload=$(printf '{"text":"Results:\n%s"}' "$results")
+json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results")
 # Uncomment the following line to enable Slack posting
-#post_to_slack "$json_payload"
+post_to_slack "$json_payload"
 
-post_to_alert_server "TEST: Please ignore it!" "$results"
+#post_to_alert_server "Domain Checking! curl_404 is ok!" "$formatted_results"
 
 # End of script
-
