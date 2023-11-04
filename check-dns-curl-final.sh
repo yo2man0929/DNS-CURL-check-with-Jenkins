@@ -4,7 +4,7 @@ set -x
 
 LOCAL_URL_FILE="./urls.txt"
 JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到/var/jenkins_home/底下
-SLACK_WEBHOOK_URL=`cat slack.key`
+SLACK_WEBHOOK_URL=`cat /var/jenkins_home/slack.key`
 
 # 方便測試，可以直接在這裡設定要測試的domain
 if [ -z "$1" ] && [ ! -z "$CHECKING_DOMAIN" ]; then
@@ -43,9 +43,10 @@ check_http_service() {
 
   status_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
   effective_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
+  ＃curl的結果會多http，需要過濾掉
   url_without_scheme=$(echo $effective_url | sed -E 's,https?://,,; s,/.*,,g')
 
-  # If the effective URL is different from the original URL, a redirect has occurred
+
   if [ "$url" != "$url_without_scheme" ]; then
     echo "${status_code}|REDIRECT|${url_without_scheme}"
   else
@@ -165,5 +166,6 @@ json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results")
 # Uncomment the following line to enable Slack posting
 post_to_slack "$json_payload"
 
-#post_to_alert_server "Domain Checking! curl_404 is ok!" "$formatted_results"
+#post_to_alert_server "Domain Checking!" "$formatted_results"
+
 
