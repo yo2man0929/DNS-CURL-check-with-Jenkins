@@ -165,12 +165,12 @@ format_results() {
 formatted_results=$(format_results "$results")
 
 # Post results to Slack and the alert server
-json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results")
+json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results\n==== Domain Checking! ====")
 
 # Uncomment the following line to enable Slack posting
 #post_to_slack "$json_payload"
 
-post_to_alert_server "Domain Checking!" "$formatted_results"
+post_to_alert_server "Domain Checking!" "$formatted_results ==== Domain Checking! ===="
 
 
 
