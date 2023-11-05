@@ -68,7 +68,7 @@ post_to_alert_server() {
   local message="$2"
   
   # 先濾掉換行符號
-  formatted_message=$(echo "$message" | tr -d '\n')
+  formatted_message=$(echo "$message" | tr '\n' ' ')
   local json_body=$(jq -n --arg title "$title" --arg msg "$formatted_message" '{title: $title, msg: $msg}')
 
   curl -X POST 'http://alert-server.hinno.site/normal/DevOps_cronjob' \
@@ -170,7 +170,7 @@ json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results")
 # Uncomment the following line to enable Slack posting
 #post_to_slack "$json_payload"
 
-post_to_alert_server "Domain Cheking!" "$formatted_results"
+post_to_alert_server "Domain Checking!" "$formatted_results"
 
 
 
