@@ -152,7 +152,8 @@ format_results() {
   echo "$1" \
     | sed -E 's/_curl: 3[0-9]{2}/_curl: ok/g' \
     | sed -E 's/_curl: 2[0-9]{2}/_curl: ok/g' \
-    | sed -E 's/_curl: 4[0-9]{2}/_curl: ok/g' \
+    | sed -E 's/_curl: 404/_curl: ok/g' \
+    | sed -E 's/_curl: 40[0-3]/_curl: fail/g' \
     | sed -E 's/_curl: 5[0-9]{2}/_curl: fail/g' \
     | sed -E 's/_curl: 000/_curl: fail/g' \
     | sed -E 's/redirect_curl: 2[0-9]{2}/redirect_curl: ok/g' \
@@ -164,13 +165,20 @@ format_results() {
 
 formatted_results=$(format_results "$results")
 
+if ! echo "$formatted_results" | grep -q "fail"; then
+  # No errors found, add the "No Error!無異常" message
+  formatted_results="${formatted_results} => No Error!無異常"
+  else 
+  formatted_results="${formatted_results} => Please check!需要查一下"
+fi
+
 # Post results to Slack and the alert server
 json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results\n==== Domain Checking! ====")
 
 # Uncomment the following line to enable Slack posting
 #post_to_slack "$json_payload"
 
-post_to_alert_server "Domain Checking!" "$formatted_results ==== Domain Checking! ===="
+post_to_alert_server "Domain Checking!" "\"${formatted_results}\" ==== Domain Checking! ===="
 
 
 
