@@ -3,7 +3,7 @@ set -x
 
 
 LOCAL_URL_FILE="./urls.txt"
-JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到/var/jenkins_home/底下
+JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到/var/jenkins_home/底下，也就是 data/jenkins_configuration/底下
 SLACK_WEBHOOK_URL=`cat /var/jenkins_home/slack.key` # local test
 
 # 方便測試，可以直接在這裡設定要測試的domain
@@ -147,7 +147,7 @@ done
 set +f
 IFS="$OLD_IFS"
 
-
+# 讓 ok, fail 取代 status code
 format_results() {
   echo "$1" \
     | sed -E 's/_curl: 3[0-9]{2}/_curl: ok/g' \
