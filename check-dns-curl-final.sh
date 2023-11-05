@@ -77,7 +77,7 @@ post_to_alert_server() {
     -d "$json_body"
 }
 
-# 確認curl, dig, awk, sed存在
+# 確認curl, dig, awk, sed, jq存在
 check_command curl
 check_command dig
 check_command awk
