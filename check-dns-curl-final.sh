@@ -63,18 +63,18 @@ check_dns_resolution() {
   fi
 }
 
-
 post_to_alert_server() {
   local title="$1"
   local message="$2"
-  curl -X 'POST' \
-    'http://alert-server.hinno.site/normal/DevOps_cronjob' \
+  
+  # 先濾掉換行符號
+  formatted_message=$(echo "$message" | tr -d '\n')
+  local json_body=$(jq -n --arg title "$title" --arg msg "$formatted_message" '{title: $title, msg: $msg}')
+
+  curl -X POST 'http://alert-server.hinno.site/normal/DevOps_cronjob' \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
-    -d "{
-          \"title\": \"$title\",
-          \"msg\": \"$message\"
-        }"
+    -d "$json_body"
 }
 
 # 確認curl, dig, awk, sed存在
@@ -82,6 +82,8 @@ check_command curl
 check_command dig
 check_command awk
 check_command sed
+check_command awk
+check_command jq
 
 
 # 初始化變數
@@ -156,16 +158,33 @@ format_results() {
     | sed -E 's/redirect_curl: 2[0-9]{2}/redirect_curl: ok/g' \
     | sed -E 's/redirect_curl: 4[0-9]{2}/redirect_curl: ok/g' \
     | sed -E 's/redirect_curl: 5[0-9]{2}/redirect_curl: fail/g' \
-    | sed -E 's/redirect_curl: 000/redirect_curl: fail/g'
+    | sed -E 's/redirect_curl: 000/redirect_curl: fail/g' 
 }
+
+
 formatted_results=$(format_results "$results")
 
 # Post results to Slack and the alert server
 json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results")
 
 # Uncomment the following line to enable Slack posting
-post_to_slack "$json_payload"
+#post_to_slack "$json_payload"
 
-#post_to_alert_server "Domain Checking!" "$formatted_results"
+post_to_alert_server "Domain Cheking!" "$formatted_results"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
