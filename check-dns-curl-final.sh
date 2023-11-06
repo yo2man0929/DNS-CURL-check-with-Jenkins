@@ -3,8 +3,8 @@ set -x
 
 
 LOCAL_URL_FILE="./urls.txt"
-JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到/var/jenkins_home/底下
-SLACK_WEBHOOK_URL=`cat /var/jenkins_home/slack.key`
+JENKINS_URL_FILE="/var/jenkins_home/urls.txt" # 記得把urls.txt放到/var/jenkins_home/底下，也就是 data/jenkins_configuration/底下
+SLACK_WEBHOOK_URL=`cat /var/jenkins_home/slack.key` # local test
 
 # 方便測試，可以直接在這裡設定要測試的domain
 if [ -z "$1" ] && [ ! -z "$CHECKING_DOMAIN" ]; then
@@ -18,7 +18,7 @@ if [ -f "$LOCAL_URL_FILE" ]; then
   URL_FILE="$LOCAL_URL_FILE"
 else
   URL_FILE="$JENKINS_URL_FILE"
-  if [ -f "$JENKINS_URL_FILE" ]; then
+  if [ ! -f "$JENKINS_URL_FILE" ]; then
   echo "1919.com" > /var/jenkins_home/urls.txt
   fi
 fi
@@ -43,11 +43,16 @@ check_http_service() {
 
   status_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
   effective_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
-  ＃curl的結果會多http，需要過濾掉
+  js_redirect=$(curl -s --max-time 5 "$url" | grep -Eo 'window.location.href\s*=\s*"[^"]+"')
+  # curl的結果會多http，需要過濾掉
   url_without_scheme=$(echo $effective_url | sed -E 's,https?://,,; s,/.*,,g')
-
-
-  if [ "$url" != "$url_without_scheme" ]; then
+	
+  if [ -n "$js_redirect" ]; then
+      js_redirect_url=$(echo $js_redirect | sed -E 's/window.location.href\s*=\s*"([^"]+)".*/\1/')
+      # 移除js url的http
+      js_redirect_url_without_scheme=$(echo $js_redirect_url | sed -E 's,https?://,,; s,/.*,,g')
+      echo "${status_code}|REDIRECT|${js_redirect_url_without_scheme}"
+  elif [ "$url" != "$url_without_scheme" ]; then
     echo "${status_code}|REDIRECT|${url_without_scheme}"
   else
     echo "${status_code}|NO_REDIRECT|$url"
@@ -63,25 +68,27 @@ check_dns_resolution() {
   fi
 }
 
-
 post_to_alert_server() {
   local title="$1"
   local message="$2"
-  curl -X 'POST' \
-    'http://alert-server.hinno.site/normal/DevOps_cronjob' \
+  
+  # 先濾掉換行符號
+  formatted_message=$(echo "$message" | tr '\n' ' ')
+  local json_body=$(jq -n --arg title "$title" --arg msg "$formatted_message" '{title: $title, msg: $msg}')
+
+  curl -X POST 'http://alert-server.hinno.site/normal/DevOps_cronjob' \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
-    -d "{
-          \"title\": \"$title\",
-          \"msg\": \"$message\"
-        }"
+    -d "$json_body"
 }
 
-# 確認curl, dig, awk, sed存在
+# 確認curl, dig, awk, sed, jq存在
 check_command curl
 check_command dig
 check_command awk
 check_command sed
+check_command awk
+check_command jq
 
 
 # 初始化變數
@@ -145,27 +152,52 @@ done
 set +f
 IFS="$OLD_IFS"
 
-
+# 讓 ok, fail 取代 status code
 format_results() {
   echo "$1" \
     | sed -E 's/_curl: 3[0-9]{2}/_curl: ok/g' \
     | sed -E 's/_curl: 2[0-9]{2}/_curl: ok/g' \
-    | sed -E 's/_curl: 4[0-9]{2}/_curl: ok/g' \
+    | sed -E 's/_curl: 404/_curl: ok/g' \
+    | sed -E 's/_curl: 40[0-3]/_curl: fail/g' \
     | sed -E 's/_curl: 5[0-9]{2}/_curl: fail/g' \
     | sed -E 's/_curl: 000/_curl: fail/g' \
     | sed -E 's/redirect_curl: 2[0-9]{2}/redirect_curl: ok/g' \
     | sed -E 's/redirect_curl: 4[0-9]{2}/redirect_curl: ok/g' \
     | sed -E 's/redirect_curl: 5[0-9]{2}/redirect_curl: fail/g' \
-    | sed -E 's/redirect_curl: 000/redirect_curl: fail/g'
+    | sed -E 's/redirect_curl: 000/redirect_curl: fail/g' 
 }
+
+
 formatted_results=$(format_results "$results")
 
+if ! echo "$formatted_results" | grep -q "fail"; then
+  # No errors found, add the "No Error!無異常" message
+  formatted_results="${formatted_results} => No Error!無異常"
+  else 
+  formatted_results="${formatted_results} => Please check!需要查一下"
+fi
+
 # Post results to Slack and the alert server
-json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results")
+json_payload=$(printf '{"text":"Results:\n%s"}' "$formatted_results\n==== Domain Checking! ====")
 
 # Uncomment the following line to enable Slack posting
-post_to_slack "$json_payload"
+#post_to_slack "$json_payload"
 
-#post_to_alert_server "Domain Checking!" "$formatted_results"
+post_to_alert_server "Domain Checking!" "\"${formatted_results}\" ==== Domain Checking! ===="
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
