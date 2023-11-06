@@ -43,11 +43,16 @@ check_http_service() {
 
   status_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
   effective_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
+  js_redirect=$(curl -s --max-time 5 "$url" | grep -Eo 'window.location.href\s*=\s*"[^"]+"')
   # curl的結果會多http，需要過濾掉
   url_without_scheme=$(echo $effective_url | sed -E 's,https?://,,; s,/.*,,g')
-
-
-  if [ "$url" != "$url_without_scheme" ]; then
+	
+  if [ -n "$js_redirect" ]; then
+      js_redirect_url=$(echo $js_redirect | sed -E 's/window.location.href\s*=\s*"([^"]+)".*/\1/')
+      # 移除js url的http
+      js_redirect_url_without_scheme=$(echo $js_redirect_url | sed -E 's,https?://,,; s,/.*,,g')
+      echo "${status_code}|REDIRECT|${js_redirect_url_without_scheme}"
+  elif [ "$url" != "$url_without_scheme" ]; then
     echo "${status_code}|REDIRECT|${url_without_scheme}"
   else
     echo "${status_code}|NO_REDIRECT|$url"
