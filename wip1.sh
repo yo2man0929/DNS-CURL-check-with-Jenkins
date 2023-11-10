@@ -8,6 +8,9 @@ CHECKING_DOMAIN=${CHECKING_DOMAIN:-$1}
 LOG_DIR="/var/jenkins_home/log/"
 TIMESTAMP=$(date +%Y%m%d%H%M)
 OUTPUT_FILE="${LOG_DIR}check_results_${TIMESTAMP}.log"
+#PROXY=${PROXY:-""} # Add a PROXY variable, empty if not set
+PROXY="socks5://127.0.0.1:1080" # local test
+
 
 initialize_environment() {
   mkdir -p "$LOG_DIR"
@@ -22,7 +25,7 @@ initialize_environment() {
 }
 
 check_required_commands() {
-  for cmd in curl dig awk sed jq; do
+  for cmd in curl dig awk sed jq tar; do
     if ! command -v "$cmd" > /dev/null 2>&1; then
       apt-get install "$cmd" -y
     fi
@@ -53,31 +56,14 @@ trace_domains() {
 
 check_single_url() {
   local url=$1
-  local result=$(check_http_service "$url")
-  local http_status=$(echo "$result" | cut -d'|' -f1)
-  local redirect_info=$(echo "$result" | cut -d'|' -f2)
-  local line="${url}_curl: ${http_status}"
-  
-  if [ "$redirect_info" = "REDIRECT" ]; then
-    local final_url=$(echo "$result" | cut -d'|' -f3)
-    line="${line}, redirect_to: ${final_url}"
-    if [ -n "$final_url" ]; then
-      local redirect_http_status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$final_url")
-      local dns_redirect_status=$(check_dns_resolution "$final_url")
-      line="${line}, redirect_curl: ${redirect_http_status}, redirect_dns: ${dns_redirect_status}"
-    fi
+  local curl_cmd="curl -s -o /dev/null -w '%{http_code}' --max-time 5"
+
+  # Use proxy if the PROXY variable is set
+  if [ -n "$PROXY" ]; then
+    curl_cmd="$curl_cmd --proxy $PROXY"
   fi
-  
-  local dns_status=$(check_dns_resolution "$url")
-  line="${line}, ${url}_dns: ${dns_status}"
 
-  results="${results}\\n${line}"
-  echo "$line" >> "$OUTPUT_FILE"
-}
-
-check_http_service() {
-  local url=$1
-  local status_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
+  local status_code=$($curl_cmd "$url")
   local effective_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
   local js_redirect=$(curl -s --max-time 5 "$url" | grep -Eo 'window.location.href\s*=\s*"[^"]+"')
   local url_without_scheme=$(echo $effective_url | sed -E 's,https?://,,; s,/.*,,g')
@@ -147,6 +133,7 @@ post_to_alert_server() {
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d "$json_body"
+  
 }
 
 # Main execution
