@@ -1,7 +1,6 @@
 #!/bin/sh
 set -x
 
-# Variables from the first script
 LOCAL_URL_FILE="./urls.txt"
 JENKINS_URL_FILE="/var/jenkins_home/urls.txt"
 SLACK_WEBHOOK_URL=$(cat /var/jenkins_home/slack.key)
@@ -10,8 +9,9 @@ LOG_DIR="/var/jenkins_home/log/"
 TIMESTAMP=$(date +%Y%m%d%H%M)
 OUTPUT_FILE="${LOG_DIR}check_results_${TIMESTAMP}.log"
 PROXY="socks5://127.0.0.1:1080" # local test
+FLYVPN_URL="https://www.flyvpn.com/files/downloads/linux/flyvpn-x86-6.2.2.0.tar.gz"
+FLYVPN_FILE="/root/flyvpn-x86_64-6.2.2.0.tar.gz"
 
-# Functions from the first script
 initialize_environment() {
   mkdir -p "$LOG_DIR"
   if [ ! -f "$JENKINS_URL_FILE" ]; then
@@ -22,26 +22,50 @@ initialize_environment() {
   else
     URL_FILE="$JENKINS_URL_FILE"
   fi
+  install_flyvpn
+  setup_i386_architecture
+  check_required_commands
+}
+
+install_flyvpn() {
+  if [ ! -f "/usr/bin/flyvpn" ]; then
+    echo "## [INFO] Install FlyVPN ##"
+    if curl -o "$FLYVPN_FILE" "$FLYVPN_URL"; then
+      echo "Extracting the downloaded file:"
+      tar -xvf "$FLYVPN_FILE" -C /usr/bin
+    else
+      echo "Failed to download FlyVPN."
+      exit 1
+    fi
+  fi
+}
+
+# Add i386 architecture and install packages
+setup_i386_architecture() {
+  dpkg --print-foreign-architectures | grep -q 'i386' || {
+    dpkg --add-architecture i386
+    apt-get update
+  }
+
+  for package in libc6:i386 libncurses5:i386 libstdc++6:i386; do
+    dpkg -l | grep -q "$package" || apt-get install -y "$package"
+  done
 }
 
 check_required_commands() {
   for cmd in curl dig awk sed jq tar; do
-    if ! command -v "$cmd" > /dev/null 2>&1; then
-      apt-get install "$cmd" -y
-    fi
+    command -v "$cmd" > /dev/null 2>&1 || apt-get install "$cmd" -y
   done
 }
 
 trace_domains() {
-  # Reset the results variable
   results=""
-
-  # Check domains from urls.txt
+  # 檢查 urls.txt 裡面的 domain
   while IFS= read -r url; do
     process_url "$url"
   done < "$URL_FILE"
 
-  # Check additional domains set in CHECKING_DOMAIN, if provided
+  # 檢查CHECKING_DOMAIN裡面的
   OLD_IFS="$IFS"
   IFS=','
   set -f
@@ -61,31 +85,31 @@ process_url() {
   local redirect_info=$(echo "$result" | cut -d'|' -f2)
   local dns_status=$(check_dns_resolution "$url")
   local line="${url}_curl: ${http_status}, ${url}_dns: ${dns_status}"
+  local curl_cmd="curl -s -o /dev/null -w '%{http_code}' --max-time 2"
   if [ -n "$PROXY" ]; then
     curl_cmd="$curl_cmd --proxy $PROXY"
   fi
   if [ "$redirect_info" = "REDIRECT" ]; then
     local final_url=$(echo "$result" | cut -d'|' -f3)
     if [ -n "$final_url" ]; then
-      local redirect_http_status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$final_url")
+      local redirect_http_status=$($curl_cmd "$final_url")
       local dns_redirect_status=$(check_dns_resolution "$final_url")
       line="${line}, redirect_to: ${final_url}, redirect_curl: ${redirect_http_status}, redirect_dns: ${dns_redirect_status}"
     fi
   fi
 
-  # Append the result to the cumulative results variable
   results="${results}\n${line}"
   echo "$line" >> "$OUTPUT_FILE"
 }
 
 check_single_url() {
   local url=$1
-  local curl_cmd="curl -s -o /dev/null -w '%{http_code}' --max-time 5"
+  local curl_cmd="curl -s -o /dev/null --max-time 5"
   if [ -n "$PROXY" ]; then
     curl_cmd="$curl_cmd --proxy $PROXY"
   fi
-  local status_code=$($curl_cmd "$url")
-  local effective_url=$(curl -Ls -o /dev/null -w '%{url_effective}' --max-time 5 "$url")
+  local status_code=$($curl_cmd -w '%{http_code}' "$url")
+  local effective_url=$($curl_cmd -L -w '%{url_effective}' "$url")
   local js_redirect=$(curl -s --max-time 5 "$url" | grep -Eo 'window.location.href\s*=\s*"[^"]+"')
   local url_without_scheme=$(echo $effective_url | sed -E 's,https?://,,; s,/.*,,g')
   if [ -n "$js_redirect" ]; then
@@ -128,10 +152,8 @@ format_results() {
   else 
     formatted_results="${formatted_results} => Please check!需要查一下"
   fi
-
   echo "$formatted_results"
 }
-
 
 post_results() {
   local formatted_results=$1
@@ -155,7 +177,6 @@ post_to_alert_server() {
     -d "$json_body"
 }
 
-# Functions from the second script
 flyvpn_conf_check() {
   cat << EOF > /etc/flyvpn.conf
 user inno1558@gmail.com
@@ -212,8 +233,6 @@ flyvpn_region_select() {
     fi
   fi
 }
-
-# Main execution
 
 initialize_environment
 check_required_commands
