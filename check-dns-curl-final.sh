@@ -48,10 +48,10 @@ check_http_service() {
   url_without_scheme=$(echo $effective_url | sed -E 's,https?://,,; s,/.*,,g')
 	
   if [ -n "$js_redirect" ]; then
-      js_redirect_url=$(echo $js_redirect | sed -E 's/window.location.href\s*=\s*"([^"]+)".*/\1/')
-      # 移除js url的http
-      js_redirect_url_without_scheme=$(echo $js_redirect_url | sed -E 's,https?://,,; s,/.*,,g')
-      echo "${status_code}|REDIRECT|${js_redirect_url_without_scheme}"
+    js_redirect_url=$(echo $js_redirect | sed -E 's/window.location.href\s*=\s*"([^"]+)".*/\1/')
+    # 移除js url的http
+    js_redirect_url_without_scheme=$(echo $js_redirect_url | sed -E 's,https?://,,; s,/.*,,g')
+    echo "${status_code}|REDIRECT|${js_redirect_url_without_scheme}"
   elif [ "$url" != "$url_without_scheme" ]; then
     echo "${status_code}|REDIRECT|${url_without_scheme}"
   else
@@ -173,7 +173,7 @@ formatted_results=$(format_results "$results")
 if ! echo "$formatted_results" | grep -q "fail"; then
   # No errors found, add the "No Error!無異常" message
   formatted_results="${formatted_results} => No Error!無異常"
-  else 
+else 
   formatted_results="${formatted_results} => Please check!需要查一下"
 fi
 
