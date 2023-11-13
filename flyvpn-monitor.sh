@@ -59,7 +59,6 @@ check_required_commands() {
 }
 
 trace_domains() {
-  results=""
   # 檢查 urls.txt 裡面的 domain
   while IFS= read -r url; do
     process_url "$url"
@@ -179,8 +178,8 @@ post_to_alert_server() {
 
 flyvpn_conf_check() {
   cat << EOF > /etc/flyvpn.conf
-user inno1558@gmail.com
-pass vpn8290
+user xxxxxx
+pass xxxxxx
 protocol proxy
 EOF
 }
@@ -209,12 +208,15 @@ flyvpn_region_select() {
     IFS=','
     set -f
     for region_vpn in $FLYVPN_REGION_LIST; do 
+      results=""
       echo " ## [INFO] Use $region_vpn ## "
+      results="${results}\n## [Use flyvpn $region_vpn] ##"
       flyvpn_connect "$region_vpn"
       trace_domains
+      results="${results}\n## [Disconnected from $region_vpn] ##"
       formatted_results=$(format_results "$results")
-      post_results "$formatted_results"
       flyvpn_disconnect
+      post_results "$formatted_results"
     done
     set +f
     IFS="$OLD_IFS"
@@ -222,11 +224,15 @@ flyvpn_region_select() {
     echo " ## [INFO] Use Hanoi for Default region ## "
     Hanoi=$(flyvpn list | grep ok | cut -f3- -d' ' | awk '{$1=$1;print}' | grep -i hanoi | head -1)
     if [ -n "$Hanoi" ]; then
+      echo " ## [INFO] Use Hanoi ## "
+      results="${results}\n## [Use flyvpn Hanoi] ##"
       flyvpn_connect "$Hanoi"
       trace_domains
+      results="${results}\n## [Disconnected from Hanoi] ##"
       formatted_results=$(format_results "$results")
-      post_results "$formatted_results"
       flyvpn_disconnect
+      post_results "$formatted_results"
+
     else
       echo "Error: Could not find Hanoi region."
       exit 1
